@@ -1,0 +1,449 @@
+import pandas as pd
+from tkinter import filedialog
+import tkinter as tk
+import chardet
+import datetime as dt
+import pymysql as Mysql
+import os
+from sqlalchemy import create_engine
+
+class datos_usuario:   
+    def __init__(self) -> None:        
+        self.nombre = None
+        self.mes = None
+        self.ano = None
+    # solicita nombre al usuario asi como la fecha de la infromacion          
+    def capturar_datos(self):
+    #captura de datos por parte del usuario 
+        #ingresar el mes 
+        print(''' ---------------------------------------------------------
+        Seleccionar el número del mes correspondiente: \n
+          1) Enero 2) Febrero 3) Marzo \n
+          4) Abril 5) Mayo    6) Junio \n
+          7) Julio 8) Agosto  9) Septiembre \n
+          10) Octubre 11) Noviembre 12) Diciembre \n-----------------------------------------------------------''')
+        while True:
+            try:
+                mes = int(input('-->'))
+                if 1 <= mes <= 12:
+                    self.mes = mes
+                    break
+                else:
+                    print("Mes incorrecto. Debe estar entre 1 y 12. Intenta de nuevo") 
+            except:
+                print("Mes incorrecto. Debe estar entre 1 y 12. Intenta de nuevo")            
+        #ingresar el año
+        print(''''-----------------------------------------------------------
+        Ingresar el año: \n------------------------------------------------------------''')
+        while True:
+            ano = input('-->')
+            if len(ano) == 4 and ano.isdigit():
+                self.ano = int(ano)
+                break
+            else:
+                print("Año incorrecto. Debe ser un número de 4 dígitos. Intenta de nuevo")
+        # ingresa el nombre
+        print(''''-----------------------------------------------------------
+        Ingresar su nombre como : \n
+              * Diana (D)
+              * Sebastian (S) \n-------------------------------------------------------------''')
+        while True:
+            nombre = input('-->')
+            nombre = nombre.strip().lower()
+            if nombre in ["d", "diana"]:
+                self.nombre = 1
+                break
+            elif nombre in ["s", "sebastian", "sebas"]:
+                self.nombre = 2
+                break
+            else:
+                print("Nombre incorrecto. Ingresa 'D' o 'Diana' para Diana, 'S' o 'Sebastian' para Sebastian. Intenta de nuevo")
+        print('Informacion capturada satisfactoriamente !!!')
+    # clase heredada contienen capura de datos tambn .
+class contenedor(datos_usuario):
+    script_directory = os.path.dirname(os.path.abspath(__file__))
+    def __init__(self) -> None:
+        self.fecha_registro = dt.date.today()
+        self.encabezados = ['llave','Fecha', 'Monto','Transaccion', 'Detalle', 'Usuario', 'mes', 'ano', 'fecha_registro', 'categoria', 'No_transaccion']
+        self.encabezados_2 = ['Comercio_id', 'Comercio_nombre', 'Categoria', 'categoria_id']
+        self.datos = pd.DataFrame()
+        self.nuevas_categorias = pd.DataFrame()
+        self.base_cuentas = pd.DataFrame()
+        self.Categorias_historico = pd.DataFrame()
+        script_directory = os.path.dirname(os.path.abspath(__file__))
+        self.BC = os.path.join(script_directory, 'Base_cuentas.csv')
+        self.TH = os.path.join(script_directory, 'Categorias_historico.csv')
+        self.diccionario_categorias = {
+            1:	'Arriendo'
+            ,2:	'Energía'
+            ,3:	'Internet'
+            ,4:	'Celular'
+            ,5:	'Suscripciones'
+            ,6:	'Mercado'
+            ,7:	'Weed y tabaco'
+            ,8:	'Transporte'
+            ,9:	'Perritas'
+            ,10:	'Salud'
+            ,11:	'Aporte a pensiones colombia' 
+            ,12:	'Comida y Alcohol afuera'
+            ,13:	'Otros'
+            ,14:	'Salario'
+            ,15:	'Tips'
+            ,16:	'auxilios'
+            ,17:	'Manual' 
+            ,18:	'Compras'
+            ,19:	'Entretenimiento'
+            ,20:	'Sin Categoria'
+            ,21:	'Inversion'
+            ,22:	'Casa'
+            ,23:	'Emergencia'
+            ,24:	'Viaje'}
+        self.categoria_maxima = len(self.diccionario_categorias)
+        self.__categoria_manual = 17
+   #Reemplaza . por , si es necesario
+    def cambiar_valores(self, x):
+        try:
+            return float(str(x).replace(',', '.'))
+        except ValueError:
+            return pd.to_numeric(x, errors='coerce')
+    # ingresa operaciones manualmente al sistema     
+    def Ingreso_manual(self):
+        self.datos = pd.DataFrame(columns=self.encabezados[0:5])     
+        print('''-----------------------------------------------------------------\n
+        Por favor ingrese manualmente todos los datos solicitados \n
+-----------------------------------------------------------------''')
+        index = 0
+        while True:
+            print('Ingresar fecha de la transacción Formato dd/mm/yyyy')
+            while True:
+                try:
+                    Fecha = input('-->')
+                    if len(Fecha) == 10:
+                        fechas = Fecha
+                        Fecha = pd.to_datetime(Fecha, format='%d/%m/%Y')
+                        break
+                    else:
+                        print('Formato de fecha es dd/mm/yyyy. Intente de nuevo.')    
+                except ValueError:
+                    print('Formato de fecha es dd/mm/yyyy. Intente de nuevo.')
+
+            print('Ingresar Monto de la transacción. ¡El separador de miles es (.)!')
+            while True:
+                try:
+                    Monto = float(input('-->'))
+                    break
+                except ValueError:
+                    print('El valor ingresado debe ser numérico. Intente de nuevo. ¡El separador de miles es (.)!')
+
+            print('Ingresar el detalle de la transaccion')
+            Detalle = input('-->')
+            llave = str(fechas) + str(Monto) + Detalle
+            # Append una nueva fila al DataFrame
+            valores = {'llave':llave, 'Fecha':Fecha, 'Monto':Monto, 'Transaccion':'Transaccion manual', 'Detalle':Detalle}            
+            new_row = pd.DataFrame([valores], columns=self.encabezados[0:5], index=[index])            
+            self.datos = pd.concat([self.datos, new_row], ignore_index=True)
+
+            print('''------------------------------------------------------------\n
+        Seleccione (S)i desea ingresar otra operación o (N)o \n
+------------------------------------------------------------''')
+            while True:
+                seleccion = input('-->')
+                seleccion = seleccion.strip().lower()
+                if seleccion in ['n', 'no', 's', 'si']:
+                    if seleccion in ['n', 'no']:
+                        return  # Exit the method if the user doesn't want to enter another transaction
+                    else:
+                        index += 1
+                        break  # Continue to the next iteration if the user wants to enter another transaction
+                else:
+                    print('Seleccione (S)i desea ingresar otra operación o (N)o')
+                    print('''Seleccione: 
+                      *(S)i 
+                      *(N)o''')
+    # importa un archivo descargado de scotiabank
+    def importar(self, delimitador=","):
+        # Crear una ventana Tkinter (no se mostrará)
+        root = tk.Tk()
+        root.withdraw()    
+        # Pedir al usuario que seleccione un archivo
+        file_path = filedialog.askopenfilename(title="Seleccionar archivo CSV", filetypes=[("Archivos CSV", "*.csv")])    
+        # Detectar la codificación del archivo para evitar errores
+        try:
+            with open(file_path, 'rb') as f:
+                result = chardet.detect(f.read())
+                print('La codificación del archivo es:', result['encoding']) 
+        except:
+            print("Ningún archivo seleccionado.") # probar cuando se cierra
+        # Verificar si el usuario seleccionó un archivo
+        if file_path:
+            # Importar el archivo CSV seleccionado
+            self.datos = pd.read_csv(filepath_or_buffer=file_path, delimiter=delimitador, encoding=result['encoding'], header=None ,index_col=False)        
+            # Convertir la primera columna al formato datetime
+            self.datos[0] = pd.to_datetime(self.datos[0], format='%m/%d/%Y')        
+            # Aplicar el manejador de errores personalizado a la segunda columna
+            self.datos[1] = self.datos[1].apply(self.cambiar_valores)       
+            # Eliminar las columnas 2
+            self.datos.drop(columns=[2], inplace=True)        
+            #corrgie columna detalle y transaccion
+            self.datos[4] = self.datos[4].str.upper().str.strip()
+            self.datos[3] = self.datos[3].str.upper().str.strip()
+            # Crear la columna 'llave'
+            self.datos['llave'] = self.datos[0].dt.strftime('%d/%m/%Y')  + self.datos[1].astype(str) + self.datos[4].astype(str)
+            column_order = ['llave'] + [col for col in self.datos.columns if col != 'llave']
+            self.datos = self.datos[column_order]
+            # Nombrar las columnas en la base
+            self.datos.columns = self.encabezados[0:5]        
+            # Devolver el DataFrame actualizado
+            
+            return self.datos
+        else:
+            print("Vuelve a intenarlo.") # probar cuando se cierra
+    # adjunta las columnas usuario mes ano fecha de registro y numero de transaccion a la base datos previamente cargada y asegura que las llaves no esten repetidas incluyendo un sufijo si es necesario
+    def verificaciones(self):
+        if self.mes is not None or self.ano is not None or self.nombre is not None:
+            self.datos['Usuario'] = self.nombre
+            self.datos['mes'] = self.mes
+            self.datos['ano'] = self.ano
+            self.datos['fecha_registro'] = self.fecha_registro
+            self.datos['categoria'] = 0 # categoria sin asignar
+            self.datos['No_transaccion'] = (dt.datetime.now().strftime('%d%m%y%H%M%S') + self.datos.index.astype(str)).str.pad(16, fillchar='0')
+            #rellena los datos de la columna detalle con el valor de transaccion si estan vacios
+            self.datos['Detalle'] = self.datos.apply(lambda row: row['Transaccion'] if pd.isna(row['Detalle']) else row['Detalle'], axis=1)
+            # Filtrar las filas donde el año de la columna 'Fecha' sea diferente al valor de la columna 'ano'
+            filas_a_eliminar = self.datos[self.datos['Fecha'].dt.year != self.ano].index        
+            # Eliminar las filas que no cumplen con la condición
+            print(f'Se eliminaron {len(filas_a_eliminar)} registros que no coincien con el ano seleccionada')
+            self.datos.drop(filas_a_eliminar, inplace=True)
+            # Filtrar las filas donde el año de la columna 'Fecha' sea diferente al valor de la columna 'mes'
+            filas_a_eliminar = self.datos[self.datos['Fecha'].dt.month != self.mes].index        
+            # Eliminar las filas que no cumplen con la condición
+            print(f'Se eliminaron {len(filas_a_eliminar)} registros que no coincien con el mes seleccionada')
+            self.datos.drop(filas_a_eliminar, inplace=True)
+            llaves_duplicadas = self.datos[self.datos.duplicated(subset='llave', keep='first')]
+            while not llaves_duplicadas.empty:
+                for indice in llaves_duplicadas.index:
+                    self.datos.loc[indice, 'llave'] += 'x'
+                llaves_duplicadas = self.datos[self.datos.duplicated(subset='llave', keep='first')]
+            return self.datos
+        else:
+            print(f'''No hay datos caputrados : 
+                  Mes->{self.mes}
+                  Ano -> {self.ano}
+                  Usuario -> {self.nombre}''')
+    # carga los archivos base cuentas e historico categoria dentro del objeto para ser trabados
+    def cargar_base(self, nombre, delimitador=";"):
+        # Importar archivo histórico
+        with open(nombre, 'rb') as f:
+            result = chardet.detect(f.read())
+            print('La codificación del archivo es:', result['encoding'])
+        archivo = pd.read_csv(nombre, delimiter=delimitador, encoding= result['encoding'], header=None)
+        if nombre == self.BC:
+            archivo.columns = self.encabezados
+            self.base_cuentas = archivo
+        else:
+            archivo.columns = self.encabezados_2
+            self.Categorias_historico = archivo
+    # Verificar que la llave del archivo no esté en el histórico    
+    def verificar_duplicados(self):        
+        filas_a_eliminar = self.datos[self.datos['llave'].isin(self.base_cuentas['llave'])].index
+        print(f'Se encontraron {len(filas_a_eliminar)} registros duplicados en la base historica')
+        self.datos.drop(filas_a_eliminar, inplace=True) 
+    # a partir de las categorias marcadas historicamente se llena la columna en datos    
+    def verificar_categoria(self ):
+        #loop que valida para cada valor en detalle si se encuentra en comercio id o en nombre comercio y se le asigna el valor de la categoria
+        for index, row in self.datos.iterrows():         
+            for valor in self.Categorias_historico['Comercio_nombre'].astype(str):
+                if pd.notna(row['Detalle']) and valor in row['Detalle']:
+                    self.datos.at[index, 'categoria'] = self.Categorias_historico.loc[self.Categorias_historico['Comercio_nombre'] == valor, 'categoria_id'].values[0]
+            if row['Detalle'] in self.Categorias_historico['Comercio_id'].values:
+                self.datos.at[index, 'categoria'] = self.Categorias_historico.loc[self.Categorias_historico['Comercio_id'] == row['Detalle'], 'categoria_id'].values[0]
+    #inlcuye nuevas cartegorias en el historico
+    def asignar_nuevas_categorias(self):
+        #inicializa el dataframe nuevas categorias con sus encabezados
+        self.nuevas_categorias.columns = pd.DataFrame(columns=self.encabezados_2)
+        #Realiza un filtro para los comercios que no tienen historico y siguen en categoria 0
+        sin_categoria = self.datos[self.datos['categoria'] == 0]
+        #hace un loop sobre todos los comercios q tengan categoria 0
+        for index, row in sin_categoria.iterrows():
+            # es necesario renombrar la variable porque esta cambia al ejecutarse la funcion verificar categorias
+            try:
+                row = sin_categoria.iloc[0]
+            #la exepcion se debe generar cuando acaba el conteo del loop
+            except:
+                break
+            #llena con informacion las variables detalle, monto, fecha
+            Comercio_id = row['Detalle']
+            monto = row['Monto']
+            fecha = row['Fecha']
+            print(f'''----------------------------------------------------------
+El dia {fecha} se realizo una operacion {row['Transaccion']} en {Comercio_id} por valor de {monto} 
+    Seleccione la categoria entre las siguiente opciones:
+----------------------------------------------------------                  
+Gastos:
+    1)	Arriendo 2)	Energía 3)	Internet 4)	Celular 5)	Suscripciones
+    6)	Mercado 7)	Weed y tabaco 8)	Transporte 9)	Perritas 10)	Salud 
+    11)	Aporte a pensiones colombia  12)	Comida y Alcohol afuera 13)	Otros
+
+Ingresos: 
+    14)	Salario 15)	Tips 16)	auxilios 
+
+Seleccion manual obliga a seleccionar una categoria mas tarde:
+    17)	Manual 20)	Sin Categoria
+
+Fondos:
+    18)	Compras 19)	Entretenimiento  21)	Inversion
+    22)	Casa 23)	Emergencia 24)	Viaje
+---------------------------------------------------------- ''')
+            #le solicita al usuario que escoja una categoria
+            while True:
+                try:
+                    Categoria = int(input('-->'))
+                    if Categoria < self.categoria_maxima and Categoria > 1:
+
+                        while True:
+                            print(f'''Desea asignaerle un nombre al comercio {Comercio_id}
+---------------------------------------------------------- 
+            Seleccione:
+            * (S)I
+            * (N)O
+---------------------------------------------------------- ''')
+                            seleccion = input('-->').upper()
+                            if seleccion in ['S', 'SI', 'N', 'NO']:
+                                if seleccion in ['S', 'SI']:
+                                    print('Ingrese el nombre del comercio:')
+                                    Comercio_nombre = str(input('-->').upper())
+                                else:
+                                    Comercio_nombre = '#N/A'
+                                break
+                            else:
+                                print('''Seleccione unicamente:
+            * (S)I
+            * (N)O
+----------------------------------------------------------''')
+                        #llena la informacion con los datos capturados en el data frame nuevas categorias 
+                        self.nuevas_categorias = pd.DataFrame({
+                            'Comercio_id': [Comercio_id],
+                            'Comercio_nombre': [Comercio_nombre],
+                            'Categoria': [self.diccionario_categorias[Categoria]],
+                            'categoria_id': [Categoria]
+                        })
+                        self.exportar_csv('Categorias_historico.csv')
+                        self.exportar_to_mysql(nombre='Categorias_historico.csv', tabla='relaciones comercios categorias historico')
+                        MY_contenedor.cargar_base('Categorias_historico.csv')
+                        self.verificar_categoria()
+                        # vuelve a filtrar los datos despues de haber corrido el proceso de busqueda anterior.
+                        sin_categoria = self.datos[self.datos['categoria'] == 0]                        
+                        break
+                    else:
+                        print(f'Ingrese solo numeros del 1 al {self.categoria_maxima}')
+                except:
+                        print(f'Ingrese solo numeros del 1 al {self.categoria_maxima}')
+    # realiza la asignacion de las categorias manuales.
+    def categorias_manuales(self):     
+        elementos_manuales = self.datos[self.datos['categoria'] == self.__categoria_manual]
+        for index, row in elementos_manuales.iterrows():
+            Comercio_id = row['Detalle']
+            monto = row['Monto']
+            fecha = row['Fecha']            
+            while True:            
+                print(f'''----------------------------------------------------------
+El dia {fecha} se realizo una operacion {row['Transaccion']} en {Comercio_id} por valor de {monto}''')
+                print('''-----------------------------------------------------------
+                    Realice la asignacion manual de las etiquetas asi:
+    Gastos:
+    1)	Arriendo 2)	Energía 3)	Internet 4)	Celular 5)	Suscripciones
+    6)	Mercado 7)	Weed y tabaco 8)	Transporte 9)	Perritas 10)	Salud 
+    11)	Aporte a pensiones colombia  12)	Comida y Alcohol afuera 13)	Otros
+
+    Ingresos: 
+    14)	Salario 15)	Tips 16)	auxilios 
+
+    Seleccion manual obliga a seleccionar una categoria mas tarde:
+    20)	Sin Categoria (No sera tenido en cuenta)
+
+    Fondos(No hace parte del PYG sino del balance):
+    18)	Compras 19)	Entretenimiento  21)	Inversion
+    22)	Casa 23)	Emergencia 24)	Viaje
+    -----------------------------------------------------''')
+                try:    
+                    Categoria = int(input('-->'))
+                    if Categoria in self.diccionario_categorias:
+                        if Categoria != self.__categoria_manual:
+                            self.datos.at[index, 'categoria'] = Categoria
+                            break
+                        else:
+                            print(f'Ingrese solamente números del 1 al {self.categoria_maxima} sin tener en cuenta el número {self.__categoria_manual} porque corresponde a la categoría manual')
+                except:
+                    print(f'Ingrese solamente números del 1 al {self.categoria_maxima}')
+
+    # exporta la informacion a un arhcivo CSV              
+    def exportar_csv(self, nombre):
+        if nombre == self.BC:
+            archivo = self.datos
+        else:
+            archivo = self.nuevas_categorias
+        try:
+            archivo.to_csv(nombre,index=False, header=None, mode='a', sep=';')
+            print(f'Archivo CSV exportado exitosamente a: {nombre}')
+            print(f'Se exportaron {len(archivo)} registros nuevos')
+        except Exception as e:
+            print(f"Error durante la exportación: {e}")            
+    # exporta la informacion a una base Mysql
+    def exportar_to_mysql(self,  nombre, user="root", password='Timoteo402', host='localhost:3306', nombre_base = 'base_cuentas', tabla='historico'):
+        if nombre == self.BC:
+            archivo = self.datos
+        else:
+            archivo = self.nuevas_categorias
+        try:
+        # Reemplaza 'user', 'password', 'database' y 'host' con tus propias credenciales
+            engine = create_engine('mysql+pymysql://'+user+':'+password+'@'+host+'/'+nombre_base)
+            # Exporta el DataFrame a la tabla 'historico' en MySQL
+            archivo.to_sql(name=tabla, con=engine, if_exists='append', index=False)        
+            print(f'Data exportada exitosamente a MySQL tabla: historico')
+            print(f'Se exportaron {len(archivo)} registros nuevos')
+            engine.dispose()
+        except Exception as e:
+            print(f"Error durante la exportación a MySQL: {e}")
+
+if __name__ == "__main__":
+    # Importar y luego exportar el DataFrame resultante    
+    MY_contenedor = contenedor()
+    MY_contenedor.importar()
+    #MY_contenedor.Ingreso_manual()
+    MY_contenedor.capturar_datos()        
+    MY_contenedor.verificaciones()
+    base_cuentas_path = MY_contenedor.BC 
+    MY_contenedor.cargar_base(base_cuentas_path)
+    #print(MY_contenedor.datos)
+    MY_contenedor.verificar_duplicados()
+    categorias_path = MY_contenedor.TH
+    MY_contenedor.cargar_base(categorias_path)    
+    #print(MY_contenedor.Categorias_historico)
+    MY_contenedor.verificar_categoria()
+    MY_contenedor.asignar_nuevas_categorias()
+    MY_contenedor.categorias_manuales()
+    print(MY_contenedor.datos)
+    MY_contenedor.exportar_csv('Base_cuentas.csv')
+    MY_contenedor.exportar_to_mysql('Base_cuentas.csv')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
